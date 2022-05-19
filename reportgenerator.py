@@ -13,8 +13,8 @@ include_system_indices = False
 report_dir_path = './reports'
 report_file_name = '{cluster}-{dt}.csv'.format(cluster=urlparse(es_hosts).netloc,dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))
 output_path = os.path.join(report_dir_path, report_file_name)
-data_buffer_size = 2
-data_buffer_interval = 1 # value in sec
+data_buffer_size = 100
+data_buffer_interval = 0.5 # value in sec
 
 if not os.path.exists(report_dir_path):
     os.makedirs(report_dir_path)
