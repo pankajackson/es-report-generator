@@ -29,18 +29,10 @@ def get_es_connection():
 def calc_size_unit(size=0, unit='B'):
     if size == 0:
         return {'size': 0, 'unit': 'B'}
-    if size >= 1024 and unit == 'B':
-        size /= 1024
-        unit = 'KB'
-    if size >= 1024 and unit == 'KB':
-        size /= 1024
-        unit = 'MB'
-    if size >= 1024 and unit == 'MB':
-        size /= 1024
-        unit = 'GB'
-    if size >= 1024 and unit == 'GB':
-        size /= 1024
-        unit = 'TB'
+    print('size in B: {siz}'.format(siz=size))
+    size = ((size/1024)/1024)/1024
+    unit = 'GB'
+    print('size in G: {siz}'.format(siz=size))
     return '{size}{unit}'.format(size=round(size, 2),unit=unit)
 
 
