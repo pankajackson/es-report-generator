@@ -86,6 +86,7 @@ def _get_parser():
     parser.add_argument(
         "endpoint",
         type=str,
+        nargs='?',
         help="ES endpoint (eg. https://my-es-cluster.com:9200)",
     )
 
@@ -118,6 +119,7 @@ def _get_parser():
         "--scheme",
         required=False,
         type=str,
+        choices=['http', 'https'],
         help="ES password (eg. http or https)",
     )
 
@@ -172,60 +174,60 @@ def _get_parser():
 def main():
     parser = _get_parser()
     args = parser.parse_args()
-    es_user = None
-    es_password = None
-    es_port = None
-    es_scheme = None
-    skip_cert = False
-    skip_system_indices = False
-
-
-    es_hosts = args.endpoint
-    if args.port:
-        es_port = args.port
-    if args.username:
-        es_user = args.username
-    if args.password:
-        es_password = args.password
-    if args.scheme:
-        es_scheme = args.scheme
-    if args.skip_cert:
-        skip_cert = args.skip_cert
-    if args.skip_system_indices:
-        skip_system_indices = args.skip_system_indices
-    report_dir_path = args.output_dir
-    data_buffer_size = args.buffer_size
-    data_buffer_interval = args.buffer_interval
 
     if args.version:
         print(f"esreportgenerator: {VERSION}")
-
-    es = get_es_connection(
-        es_hosts=es_hosts,
-        es_user=es_user,
-        es_password=es_password,
-        es_port=es_port,
-        es_scheme=es_scheme,
-        skip_cert=skip_cert
-    )
-    if not es.ping():
-        raise ValueError("Connection Failed")
-    raw_indices = get_raw_indices(es=es)
-    if not os.path.exists(report_dir_path):
-        os.makedirs(report_dir_path)
-    if not urlparse(es_hosts).netloc:
-        report_file_name_prefix = es_hosts
     else:
-        report_file_name_prefix = urlparse(es_hosts).netloc
-    report_file_name = '{cluster}-{dt}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
-    output_path = os.path.join(report_dir_path, report_file_name)
-    parse_raw_indices(
-        raw_indices=raw_indices,
-        include_system_indices=not skip_system_indices,
-        data_buffer_size=data_buffer_size,
-        data_buffer_interval=data_buffer_interval,
-        output_path=output_path
-    )
+        es_user = None
+        es_password = None
+        es_port = None
+        es_scheme = None
+        skip_cert = False
+        skip_system_indices = False
+
+        es_hosts = args.endpoint
+        if args.port:
+            es_port = args.port
+        if args.username:
+            es_user = args.username
+        if args.password:
+            es_password = args.password
+        if args.scheme:
+            es_scheme = args.scheme
+        if args.skip_cert:
+            skip_cert = args.skip_cert
+        if args.skip_system_indices:
+            skip_system_indices = args.skip_system_indices
+        report_dir_path = args.output_dir
+        data_buffer_size = args.buffer_size
+        data_buffer_interval = args.buffer_interval
+
+        es = get_es_connection(
+            es_hosts=es_hosts,
+            es_user=es_user,
+            es_password=es_password,
+            es_port=es_port,
+            es_scheme=es_scheme,
+            skip_cert=skip_cert
+        )
+        if not es.ping():
+            raise ValueError("Connection Failed")
+        raw_indices = get_raw_indices(es=es)
+        if not os.path.exists(report_dir_path):
+            os.makedirs(report_dir_path)
+        if not urlparse(es_hosts).netloc:
+            report_file_name_prefix = es_hosts
+        else:
+            report_file_name_prefix = urlparse(es_hosts).netloc
+        report_file_name = '{cluster}-{dt}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
+        output_path = os.path.join(report_dir_path, report_file_name)
+        parse_raw_indices(
+            raw_indices=raw_indices,
+            include_system_indices=not skip_system_indices,
+            data_buffer_size=data_buffer_size,
+            data_buffer_interval=data_buffer_interval,
+            output_path=output_path
+        )
 
 
 if __name__ == "__main__":
