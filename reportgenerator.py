@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from elasticsearch import Elasticsearch
 import pandas as pd
 from urllib.parse import urlparse
