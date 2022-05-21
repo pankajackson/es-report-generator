@@ -27,12 +27,11 @@ def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es
         )
     return es
 
-def bytes_to_gb_converter(size=0, unit='B'):
+def bytes_to_gb_converter(size=0):
     if size == 0:
-        return '0GB'
+        return 0
     size = ((size/1024)/1024)/1024
-    unit = 'GB'
-    return '{size}{unit}'.format(size=round(size, 2),unit=unit)
+    return round(size, 3)
 
 
 def get_raw_indices(es, index="*"):
@@ -62,9 +61,9 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 "docs_primary_count": raw_indices['indices'][indices]['primaries']['docs']['count'],
                 "docs_replica_count": raw_indices['indices'][indices]['total']['docs']['count'] - raw_indices['indices'][indices]['primaries']['docs']['count'],
                 "docs_total_count": raw_indices['indices'][indices]['total']['docs']['count'],
-                "store_primary_size": bytes_to_gb_converter(raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
-                "store_replica_size": bytes_to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'] - raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
-                "store_total_size": bytes_to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'])
+                "store_primary_size(GB)": bytes_to_gb_converter(raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
+                "store_replica_size(GB)": bytes_to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'] - raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
+                "store_total_size(GB)": bytes_to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'])
             }
             indices_data_list.append(indices_data)
             if len(indices_data_list) >= data_buffer_size:
