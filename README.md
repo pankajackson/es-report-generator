@@ -12,8 +12,8 @@ This README would normally document whatever steps are necessary to get your app
 * Make sure you have python 3.8 or later installed
 * Install: ./install.sh
 * Help: esreportgen -h
-* Usage: esreportgen https://localhost:9200 -u elastic -p 8PcTFW5TUL1VqQ11361H2A1u 
-* Usage: esreportgen localhost -u elastic -p 8PcTFW5TUL1VqQ11361H2A1u -P 9200 -s https -o ~/myesreports
+* Usage: esreportgen https://localhost:9200 -u elastic -p secret 
+* Usage: esreportgen localhost -u elastic -p secret -P 9200 -s https -o ~/myesreports
 
 ### Contribution guidelines ###
 
