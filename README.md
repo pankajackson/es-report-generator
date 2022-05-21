@@ -4,15 +4,16 @@ This README would normally document whatever steps are necessary to get your app
 
 ### What is this repository for? ###
 
-* Quick summary: This program is to generate current elasticsearch indices report in csv file
+* Quick summary: This tool is to generate current elasticsearch indices report in csv file
 * Version: 0.1
 
 ### How do I get set up? ###
 
 * Make sure you have python 3.8 or later installed
-* Install Dependencies: pip install -r requirements.txt
-* update Credentials: Open reportgenerator.py and update es_host, es_user, es_password
-* Run: python reportgenerator.py
+* Install: ./install.sh
+* Help: esreportgen -h
+* Usage: esreportgen https://localhost:9200 -u elastic -p 8PcTFW5TUL1VqQ11361H2A1u 
+* Usage: esreportgen localhost -u elastic -p 8PcTFW5TUL1VqQ11361H2A1u -P 9200 -s https -o ~/myesreports
 
 ### Contribution guidelines ###
 
