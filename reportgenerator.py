@@ -6,6 +6,7 @@ import argparse
 from datetime import datetime
 import pwd
 import os
+from getpass import getpass
 import time
 VERSION = 0.1
 
@@ -202,6 +203,9 @@ def main():
         report_dir_path = args.output_dir
         data_buffer_size = args.buffer_size
         data_buffer_interval = args.buffer_interval
+
+        if es_user and not es_password:
+            es_password = getpass("Please enter password for user \"{es_user}\": ".format(es_user=es_user))
 
         es = get_es_connection(
             es_hosts=es_hosts,
