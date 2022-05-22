@@ -195,7 +195,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print(f"esreportgenerator: {VERSION}")
+        print(f"esreportgen: {VERSION}")
     else:
         es_user = None
         es_password = None
@@ -232,25 +232,28 @@ def main():
             es_scheme=es_scheme,
             skip_cert=skip_cert
         )
-        if not es.ping():
-            raise ValueError("Connection Failed")
-        raw_indices = get_raw_indices(es=es)
-        if not os.path.exists(report_dir_path):
-            os.makedirs(report_dir_path)
-        if not urlparse(es_hosts).netloc:
-            report_file_name_prefix = es_hosts
-        else:
-            report_file_name_prefix = urlparse(es_hosts).netloc
-        report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
-        report_file_name = '{cluster}-{dt}-{sf}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'), sf=report_file_name_suffix)
-        output_path = os.path.join(report_dir_path, report_file_name)
-        parse_raw_indices(
-            raw_indices=raw_indices,
-            include_system_indices=not skip_system_indices,
-            data_buffer_size=data_buffer_size,
-            data_buffer_interval=data_buffer_interval,
-            output_path=output_path
-        )
+
+        try:
+            es.cluster.health()
+            raw_indices = get_raw_indices(es=es)
+            if not os.path.exists(report_dir_path):
+                os.makedirs(report_dir_path)
+            if not urlparse(es_hosts).netloc:
+                report_file_name_prefix = es_hosts
+            else:
+                report_file_name_prefix = urlparse(es_hosts).netloc
+            report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
+            report_file_name = '{cluster}-{dt}-{sf}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'), sf=report_file_name_suffix)
+            output_path = os.path.join(report_dir_path, report_file_name)
+            parse_raw_indices(
+                raw_indices=raw_indices,
+                include_system_indices=not skip_system_indices,
+                data_buffer_size=data_buffer_size,
+                data_buffer_interval=data_buffer_interval,
+                output_path=output_path
+            )
+        except Exception as e:
+            print('ERROR: {error}'.format(error=str(e)))
 
 
 if __name__ == "__main__":
