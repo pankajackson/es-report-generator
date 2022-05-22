@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 from elasticsearch import Elasticsearch
-import pandas as pd
 from urllib.parse import urlparse
-import argparse
 from datetime import datetime
+from getpass import getpass
+import pandas as pd
+import uuid
+import base64
+import argparse
 import pwd
 import os
-from getpass import getpass
 import time
 VERSION = 0.1
 
@@ -224,7 +226,8 @@ def main():
             report_file_name_prefix = es_hosts
         else:
             report_file_name_prefix = urlparse(es_hosts).netloc
-        report_file_name = '{cluster}-{dt}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
+        report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
+        report_file_name = '{cluster}-{dt}-{sf}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'), sf=report_file_name_suffix)
         output_path = os.path.join(report_dir_path, report_file_name)
         parse_raw_indices(
             raw_indices=raw_indices,
