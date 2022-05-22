@@ -1,8 +1,5 @@
-# README #
+# ES Report Generator (v0.1) #
 
-This README would normally document whatever steps are necessary to get your application up and running.
-
-### What is this repository for? ###
 
 * Quick summary: This tool is to generate current elasticsearch indices report in csv file
 * Version: 0.1
