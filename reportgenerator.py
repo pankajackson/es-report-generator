@@ -83,7 +83,7 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
 
 def _get_parser():
     parser = argparse.ArgumentParser(
-        prog="esreportgenerator",
+        prog="esreportgen",
         epilog="Please report bugs at pankajackson@live.co.uk",
     )
 
