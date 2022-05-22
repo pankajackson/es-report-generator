@@ -13,14 +13,17 @@ This README would normally document whatever steps are necessary to get your app
 * Install: 
 
         $ ./install.sh
+        
 * Help: 
 
         $ esreportgen -h
+        
 * Usage: 
 
         esreportgen https://localhost:9200 -u elastic -p secret 
+    
     or
-
+    
         esreportgen localhost -u elastic -p secret -P 9200 -s https -o ~/myesreports
 
 ### Contribution guidelines ###
