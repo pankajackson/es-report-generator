@@ -95,14 +95,6 @@ def _get_parser():
     )
 
     parser.add_argument(
-        "-P",
-        "--port",
-        required=False,
-        type=str,
-        help="ES Port (eg. 9200)",
-    )
-
-    parser.add_argument(
         "-u",
         "--username",
         required=False,
@@ -116,6 +108,14 @@ def _get_parser():
         required=False,
         type=str,
         help="ES password (eg. secret)",
+    )
+
+    parser.add_argument(
+        "-P",
+        "--port",
+        required=False,
+        type=str,
+        help="ES Port (eg. 9200)",
     )
 
     parser.add_argument(
