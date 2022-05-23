@@ -243,8 +243,8 @@ def main():
             else:
                 report_file_name_prefix = urlparse(es_hosts).netloc
             report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
-            report_file_name = '{cluster}-{dt}-{sf}.csv'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'), sf=report_file_name_suffix)
-            output_path = os.path.join(report_dir_path, report_file_name)
+            report_file_name = '{cluster}-{dt}-{sf}'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'), sf=report_file_name_suffix)
+            output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
             parse_raw_indices(
                 raw_indices=raw_indices,
                 include_system_indices=not skip_system_indices,
