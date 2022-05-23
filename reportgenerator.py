@@ -195,7 +195,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print(f"esreportgen: {VERSION}")
+        print("esreportgen: {VERSION}".format(VERSION=VERSION))
     else:
         es_user = None
         es_password = None
