@@ -78,13 +78,13 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
     total_indices_data = {
         "indices": 'Total',
         "shard_primary_count": raw_indices['_all']['primaries']['shard_stats']['total_count'],
-        "shard_replica_count": raw_indices['_all']['total']['shard_stats']['total_count'] - raw_indices['indices'][indices]['primaries']['shard_stats']['total_count'],
+        "shard_replica_count": raw_indices['_all']['total']['shard_stats']['total_count'] - raw_indices['_all']['primaries']['shard_stats']['total_count'],
         "shard_total_count": raw_indices['_all']['total']['shard_stats']['total_count'],
         "docs_primary_count": raw_indices['_all']['primaries']['docs']['count'],
-        "docs_replica_count": raw_indices['_all']['total']['docs']['count'] - raw_indices['indices'][indices]['primaries']['docs']['count'],
+        "docs_replica_count": raw_indices['_all']['total']['docs']['count'] - raw_indices['_all']['primaries']['docs']['count'],
         "docs_total_count": raw_indices['_all']['total']['docs']['count'],
         "store_primary_size(GB)": bytes_to_gb_converter(raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_replica_size(GB)": bytes_to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'] - raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
+        "store_replica_size(GB)": bytes_to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'] - raw_indices['_all']['primaries']['store']['size_in_bytes']),
         "store_total_size(GB)": bytes_to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'])
 
     }
