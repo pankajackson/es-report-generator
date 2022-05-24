@@ -10,6 +10,7 @@ import argparse
 import pwd
 import os
 import time
+import warnings
 VERSION = 0.1
 
 
@@ -191,6 +192,7 @@ def _get_parser():
 
 
 def main():
+    warnings.filterwarnings('ignore')
     parser = _get_parser()
     args = parser.parse_args()
 
