@@ -40,7 +40,7 @@ def bytes_to_gb_converter(size=0):
 
 
 def get_raw_indices(es, index="*"):
-    es_res = es.indices.stats(index=index,)
+    es_res = es.indices.stats(index=index, forbid_closed_indices=True)
     return es_res
 
 def write_to_csv(indices_data_list, output_path):
