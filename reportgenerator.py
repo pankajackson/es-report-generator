@@ -11,7 +11,7 @@ import pwd
 import os
 import time
 import warnings
-VERSION = 0.1
+VERSION = 0.2
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -41,6 +41,10 @@ def bytes_to_gb_converter(size=0):
 
 def get_raw_indices(es, index="*"):
     es_res = es.indices.stats(index=index, forbid_closed_indices=True)
+    return es_res
+
+def get_raw_indices_web(es, index="*"):
+    es_res = es.cat.indices(index=index)
     return es_res
 
 def write_to_csv(indices_data_list, output_path):
@@ -95,6 +99,32 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
     print('Total Shards: {ts}'.format(ts=shards_status['shards_total']))
     print('Successful Shards: {ss}'.format(ss=shards_status['shards_successful']))
     print('Failed Shards: {fs}'.format(fs=shards_status['shards_failed']))
+
+
+def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M')))):
+    indices_data_list = []
+    for indices in str(raw_indices).splitlines():
+        if str(indices.split()[1]) == 'open':
+            if (not str(indices.split()[2]).startswith('.')) or (include_system_indices and str(indices.split()[2]).startswith('.')):
+                indices_data = {
+                    "indices": indices.split()[2],
+                    "shard_primary_count": indices.split()[4],
+                    "shard_replica_count": indices.split()[5],
+                    "shard_total_count": int(indices.split()[4]) + int(indices.split()[5]),
+                    "docs_primary_count": indices.split()[6],
+                    "store_primary_size": indices.split()[9],
+                    "store_total_size": indices.split()[8]
+                }
+                indices_data_list.append(indices_data)
+                if len(indices_data_list) >= data_buffer_size:
+                    write_to_csv(indices_data_list, output_path)
+                    indices_data_list.clear()
+                    time.sleep(data_buffer_interval)
+        else:
+            print('Skipping indices {indices}: indices is in {state} state'.format(indices=indices.split()[2], state=indices.split()[1]))
+
+    write_to_csv(indices_data_list, output_path)
+    print('Report: {rp}'.format(rp=os.path.abspath(output_path)))
 
 
 def _get_parser():
@@ -235,27 +265,54 @@ def main():
             skip_cert=skip_cert
         )
 
-        # try:
-        es.cluster.health()
-        raw_indices = get_raw_indices(es=es)
-        if not os.path.exists(report_dir_path):
-            os.makedirs(report_dir_path)
-        if not urlparse(es_hosts).netloc:
-            report_file_name_prefix = es_hosts
-        else:
-            report_file_name_prefix = urlparse(es_hosts).netloc
-        report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
-        report_file_name = '{cluster}-{dt}-{sf}'.format(cluster=report_file_name_prefix,dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'), sf=report_file_name_suffix)
-        output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
-        parse_raw_indices(
-            raw_indices=raw_indices,
-            include_system_indices=not skip_system_indices,
-            data_buffer_size=data_buffer_size,
-            data_buffer_interval=data_buffer_interval,
-            output_path=output_path
-        )
-        # except Exception as e:
-        #     print('ERROR: {error}'.format(error=str(e)))
+        try:
+            es.cluster.health()
+            try:
+                raw_indices = get_raw_indices(es=es)
+                if not os.path.exists(report_dir_path):
+                    os.makedirs(report_dir_path)
+                if not urlparse(es_hosts).netloc:
+                    report_file_name_prefix = es_hosts
+                else:
+                    report_file_name_prefix = urlparse(es_hosts).netloc
+                report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
+                report_file_name = '{cluster}-{dt}-{sf}'.format(cluster=report_file_name_prefix,
+                                                                dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                                                                sf=report_file_name_suffix)
+                output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(
+                    out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
+                parse_raw_indices(
+                    raw_indices=raw_indices,
+                    include_system_indices=not skip_system_indices,
+                    data_buffer_size=data_buffer_size,
+                    data_buffer_interval=data_buffer_interval,
+                    output_path=output_path
+                )
+            except Exception as e:
+                print('ERROR: {error}'.format(error=e))
+                print('Looks like ES version compatibility problem!')
+                print('Trying with ES Web API')
+                raw_indices = get_raw_indices_web(es=es)
+                if not os.path.exists(report_dir_path):
+                    os.makedirs(report_dir_path)
+                if not urlparse(es_hosts).netloc:
+                    report_file_name_prefix = es_hosts
+                else:
+                    report_file_name_prefix = urlparse(es_hosts).netloc
+                report_file_name_suffix = base64.b64encode(str(uuid.uuid4()).encode("ascii")).decode("ascii")[:6]
+                report_file_name = '{cluster}-{dt}-{sf}'.format(cluster=report_file_name_prefix,
+                                                                dt=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                                                                sf=report_file_name_suffix)
+                output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(
+                    out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
+                parse_raw_indices_web(
+                    raw_indices=raw_indices,
+                    include_system_indices=not skip_system_indices,
+                    data_buffer_size=data_buffer_size,
+                    data_buffer_interval=data_buffer_interval,
+                    output_path=output_path)
+        except Exception as e:
+            print('ERROR: {error}'.format(error=str(e)))
 
 
 if __name__ == "__main__":
