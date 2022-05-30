@@ -3,6 +3,7 @@ from elasticsearch import Elasticsearch
 from urllib.parse import urlparse
 from datetime import datetime
 from getpass import getpass
+from pygrok import Grok as gk
 import pandas as pd
 import uuid
 import base64
@@ -11,7 +12,7 @@ import pwd
 import os
 import time
 import warnings
-VERSION = 0.22
+VERSION = 0.23
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -32,10 +33,20 @@ def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es
         )
     return es
 
-def bytes_to_gb_converter(size=0):
+def _to_gb_converter(size=0, unit='B'.upper()):
+    size = float(size)
     if size == 0:
         return 0
-    size = ((size/1024)/1024)/1024
+    if str(unit).upper() == 'B':
+        size = ((size/1024)/1024)/1024
+    elif str(unit).upper() == 'KB':
+        size = (size/1024)/1024
+    elif str(unit).upper() == 'MB':
+        size = size/1024
+    elif str(unit).upper() == 'GB':
+        size = size
+    elif str(unit).upper() == 'TB':
+        size = size*1024
     return round(size, 3)
 
 
@@ -70,9 +81,9 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 "docs_primary_count": raw_indices['indices'][indices]['primaries']['docs']['count'],
                 "docs_replica_count": raw_indices['indices'][indices]['total']['docs']['count'] - raw_indices['indices'][indices]['primaries']['docs']['count'],
                 "docs_total_count": raw_indices['indices'][indices]['total']['docs']['count'],
-                "store_primary_size(GB)": bytes_to_gb_converter(raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
-                "store_replica_size(GB)": bytes_to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'] - raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
-                "store_total_size(GB)": bytes_to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'])
+                "store_primary_size(GB)": _to_gb_converter(raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
+                "store_replica_size(GB)": _to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'] - raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
+                "store_total_size(GB)": _to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'])
             }
             indices_data_list.append(indices_data)
             if len(indices_data_list) >= data_buffer_size:
@@ -88,9 +99,9 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
         "docs_primary_count": raw_indices['_all']['primaries']['docs']['count'],
         "docs_replica_count": raw_indices['_all']['total']['docs']['count'] - raw_indices['_all']['primaries']['docs']['count'],
         "docs_total_count": raw_indices['_all']['total']['docs']['count'],
-        "store_primary_size(GB)": bytes_to_gb_converter(raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_replica_size(GB)": bytes_to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'] - raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_total_size(GB)": bytes_to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'])
+        "store_primary_size(GB)": _to_gb_converter(raw_indices['_all']['primaries']['store']['size_in_bytes']),
+        "store_replica_size(GB)": _to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'] - raw_indices['_all']['primaries']['store']['size_in_bytes']),
+        "store_total_size(GB)": _to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'])
 
     }
     indices_data_list.append(total_indices_data)
@@ -100,27 +111,33 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
     print('Successful Shards: {ss}'.format(ss=shards_status['shards_successful']))
     print('Failed Shards: {fs}'.format(fs=shards_status['shards_failed']))
 
+def parse_size(raw_size):
+    pattern = '%{BASE10NUM:size}%{NOTSPACE:unit}'
+    if raw_size:
+        parsed_size = gk(pattern=pattern).match(raw_size)
+        return parsed_size
+
 
 def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M')))):
     indices_data_list = []
     for indices in str(raw_indices).splitlines():
         try:
             if (not str(indices.split()[2]).startswith('.')) or (include_system_indices and str(indices.split()[2]).startswith('.')):
-                indices_data = {
-                    "indices": indices.split()[2],
-                    "shard_primary_count": indices.split()[4],
-                    "shard_replica_count": indices.split()[5],
-                    "shard_total_count": int(indices.split()[4]) + int(indices.split()[5]),
-                    "docs_primary_count": indices.split()[6],
-                    "store_primary_size": indices.split()[9],
-                    "store_total_size": indices.split()[8]
-                }
+                indices_data = {}
+                indices_data["indices"] = indices.split()[2]
+                indices_data["shard_primary_count"] = indices.split()[4]
+                indices_data["shard_replica_count"] = indices.split()[5]
+                indices_data["shard_total_count"] = int(indices.split()[4]) + int(indices.split()[5])
+                indices_data["docs_primary_count"] = indices.split()[6]
+                indices_data["store_primary_size(GB)"] = _to_gb_converter(size=parse_size(raw_size=indices.split()[9])["size"], unit=parse_size(raw_size=indices.split()[9])["unit"])
+                indices_data["store_total_size(GB)"] = _to_gb_converter(size=parse_size(raw_size=indices.split()[8])["size"], unit=parse_size(raw_size=indices.split()[8])["unit"])
                 indices_data_list.append(indices_data)
                 if len(indices_data_list) >= data_buffer_size:
                     write_to_csv(indices_data_list, output_path)
                     indices_data_list.clear()
                     time.sleep(data_buffer_interval)
         except Exception as e:
+            print('ERROR: {error}'.format(error=e))
             print('Skipping indices {indices}: indices is in {state} state and {health} health'.format(indices=indices.split()[2], state=indices.split()[1], health=indices.split()[0]))
             print(indices)
 
