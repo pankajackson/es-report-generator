@@ -4,6 +4,9 @@ from urllib.parse import urlparse
 from datetime import datetime
 from getpass import getpass
 from pygrok import Grok as gk
+import yaml
+from pathlib import Path
+import fnmatch
 import pandas as pd
 import uuid
 import base64
@@ -12,7 +15,7 @@ import pwd
 import os
 import time
 import warnings
-VERSION = 0.23
+VERSION = 0.25
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -49,6 +52,22 @@ def _to_gb_converter(size=0, unit='B'.upper()):
         size = size*1024
     return round(size, 3)
 
+def parse_config(config_path):
+    conf = yaml.safe_load(Path(config_path).read_text())
+    return conf
+
+def get_owner(config, index_pattern):
+    try:
+        for owner in config['owners'].keys():
+            for proj in config['owners'][owner]:
+                for pattern in proj['index_patterns']:
+                    if fnmatch.fnmatch(index_pattern, pattern):
+                        return {'owner': owner, 'project': proj['project']}
+        return {'owner': None, 'project': None}
+    except Exception as e:
+        print('ERROR: {error}'.format(error=e))
+        return {'owner': None, 'project': None}
+
 
 def get_raw_indices(es, index="*"):
     es_res = es.indices.stats(index=index, forbid_closed_indices=True)
@@ -63,7 +82,7 @@ def write_to_csv(indices_data_list, output_path):
     df.to_csv(output_path, mode='a', index=False, header=not os.path.exists(output_path))
 
 
-def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M')))):
+def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None):
     shards_status = {
         "shards_total": raw_indices['_shards']['total'],
         "shards_successful": raw_indices['_shards']['successful'],
@@ -85,6 +104,10 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 "store_replica_size(GB)": _to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'] - raw_indices['indices'][indices]['primaries']['store']['size_in_bytes']),
                 "store_total_size(GB)": _to_gb_converter(raw_indices['indices'][indices]['total']['store']['size_in_bytes'])
             }
+            if config:
+                owner_details = get_owner(config=config, index_pattern=indices)
+                indices_data['owner'] = owner_details['owner']
+                indices_data['project'] = owner_details['project']
             indices_data_list.append(indices_data)
             if len(indices_data_list) >= data_buffer_size:
                 write_to_csv(indices_data_list, output_path)
@@ -118,7 +141,7 @@ def parse_size(raw_size):
         return parsed_size
 
 
-def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M')))):
+def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None):
     indices_data_list = []
     for indices in str(raw_indices).splitlines():
         try:
@@ -131,6 +154,10 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
                 indices_data["docs_primary_count"] = indices.split()[6]
                 indices_data["store_primary_size(GB)"] = _to_gb_converter(size=parse_size(raw_size=indices.split()[9])["size"], unit=parse_size(raw_size=indices.split()[9])["unit"])
                 indices_data["store_total_size(GB)"] = _to_gb_converter(size=parse_size(raw_size=indices.split()[8])["size"], unit=parse_size(raw_size=indices.split()[8])["unit"])
+                if config:
+                    owner_details = get_owner(config=config, index_pattern=indices.split()[2])
+                    indices_data['owner'] = owner_details['owner']
+                    indices_data['project'] = owner_details['project']
                 indices_data_list.append(indices_data)
                 if len(indices_data_list) >= data_buffer_size:
                     write_to_csv(indices_data_list, output_path)
@@ -157,6 +184,14 @@ def _get_parser():
         type=str,
         nargs='?',
         help="ES endpoint (eg. https://my-es-cluster.com:9200)",
+    )
+
+    parser.add_argument(
+        "-c",
+        "--config",
+        required=False,
+        type=str,
+        help="config file path containing owner details",
     )
 
     parser.add_argument(
@@ -209,6 +244,14 @@ def _get_parser():
     )
 
     parser.add_argument(
+        "--skip-config",
+        required=False,
+        action="store_true",
+        default=False,
+        help="Skip config file owner less details",
+    )
+
+    parser.add_argument(
         "-o",
         "--output-dir",
         required=False,
@@ -254,6 +297,8 @@ def main():
         es_scheme = None
         skip_cert = False
         skip_system_indices = False
+        skip_config = False
+        config_path = "/etc/esreportgen.yaml"
 
         es_hosts = args.endpoint
         if args.port:
@@ -268,6 +313,10 @@ def main():
             skip_cert = args.skip_cert
         if args.skip_system_indices:
             skip_system_indices = args.skip_system_indices
+        if args.skip_config:
+            skip_config = args.skip_config
+        if args.config:
+            config_path = args.config
         report_dir_path = args.output_dir
         data_buffer_size = args.buffer_size
         data_buffer_interval = args.buffer_interval
@@ -284,6 +333,16 @@ def main():
             skip_cert=skip_cert
         )
 
+        if not os.path.exists(config_path) and not skip_config:
+            raise ValueError('unable to read configuration file {c}, please use --skip-config to skip owner based details.'.format(c=config_path))
+        elif skip_config:
+            config = None
+        else:
+            try:
+                config = parse_config(config_path)
+            except Exception as e:
+                print('ERROR: {error}'.format(error=e))
+                raise ValueError('Unable to Understand config, please check file {file}'.format(file=config_path))
         try:
             es.cluster.health()
             try:
@@ -305,7 +364,8 @@ def main():
                     include_system_indices=not skip_system_indices,
                     data_buffer_size=data_buffer_size,
                     data_buffer_interval=data_buffer_interval,
-                    output_path=output_path
+                    output_path=output_path,
+                    config=config
                 )
             except Exception as e:
                 print('ERROR: {error}'.format(error=e))
@@ -329,7 +389,9 @@ def main():
                     include_system_indices=not skip_system_indices,
                     data_buffer_size=data_buffer_size,
                     data_buffer_interval=data_buffer_interval,
-                    output_path=output_path)
+                    output_path=output_path,
+                    config=config
+                )
         except Exception as e:
             print('ERROR: {error}'.format(error=str(e)))
 
