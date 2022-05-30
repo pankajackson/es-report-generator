@@ -104,7 +104,7 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
 def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M')))):
     indices_data_list = []
     for indices in str(raw_indices).splitlines():
-        if str(indices.split()[1]) == 'open':
+        if str(indices.split()[1]) == 'open' or len(indices.split()) < 10:
             if (not str(indices.split()[2]).startswith('.')) or (include_system_indices and str(indices.split()[2]).startswith('.')):
                 indices_data = {
                     "indices": indices.split()[2],
@@ -122,6 +122,7 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
                     time.sleep(data_buffer_interval)
         else:
             print('Skipping indices {indices}: indices is in {state} state'.format(indices=indices.split()[2], state=indices.split()[1]))
+            print(indices)
 
     write_to_csv(indices_data_list, output_path)
     print('Report: {rp}'.format(rp=os.path.abspath(output_path)))
