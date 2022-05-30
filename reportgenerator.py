@@ -11,7 +11,7 @@ import pwd
 import os
 import time
 import warnings
-VERSION = 0.2
+VERSION = 0.21
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -105,21 +105,26 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
     indices_data_list = []
     for indices in str(raw_indices).splitlines():
         if str(indices.split()[1]) == 'open' or len(indices.split()) < 10:
-            if (not str(indices.split()[2]).startswith('.')) or (include_system_indices and str(indices.split()[2]).startswith('.')):
-                indices_data = {
-                    "indices": indices.split()[2],
-                    "shard_primary_count": indices.split()[4],
-                    "shard_replica_count": indices.split()[5],
-                    "shard_total_count": int(indices.split()[4]) + int(indices.split()[5]),
-                    "docs_primary_count": indices.split()[6],
-                    "store_primary_size": indices.split()[9],
-                    "store_total_size": indices.split()[8]
-                }
-                indices_data_list.append(indices_data)
-                if len(indices_data_list) >= data_buffer_size:
-                    write_to_csv(indices_data_list, output_path)
-                    indices_data_list.clear()
-                    time.sleep(data_buffer_interval)
+            try:
+                if (not str(indices.split()[2]).startswith('.')) or (include_system_indices and str(indices.split()[2]).startswith('.')):
+                    indices_data = {
+                        "indices": indices.split()[2],
+                        "shard_primary_count": indices.split()[4],
+                        "shard_replica_count": indices.split()[5],
+                        "shard_total_count": int(indices.split()[4]) + int(indices.split()[5]),
+                        "docs_primary_count": indices.split()[6],
+                        "store_primary_size": indices.split()[9],
+                        "store_total_size": indices.split()[8]
+                    }
+                    indices_data_list.append(indices_data)
+                    if len(indices_data_list) >= data_buffer_size:
+                        write_to_csv(indices_data_list, output_path)
+                        indices_data_list.clear()
+                        time.sleep(data_buffer_interval)
+            except Exception as e:
+                print('Skipping indices {indices}: indices is in {state} state'.format(indices=indices.split()[2], state=indices.split()[1]))
+                print(indices)
+
         else:
             print('Skipping indices {indices}: indices is in {state} state'.format(indices=indices.split()[2], state=indices.split()[1]))
             print(indices)
