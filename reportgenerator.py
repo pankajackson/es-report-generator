@@ -15,7 +15,7 @@ import pwd
 import os
 import time
 import warnings
-VERSION = 0.25
+VERSION = 0.26
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -82,7 +82,7 @@ def write_to_csv(indices_data_list, output_path):
     df.to_csv(output_path, mode='a', index=False, header=not os.path.exists(output_path))
 
 
-def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None):
+def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None, ilm_policies=None, indices_ilm=None):
     shards_status = {
         "shards_total": raw_indices['_shards']['total'],
         "shards_successful": raw_indices['_shards']['successful'],
@@ -108,6 +108,16 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 owner_details = get_owner(config=config, index_pattern=indices)
                 indices_data['owner'] = owner_details['owner']
                 indices_data['project'] = owner_details['project']
+            if ilm_policies and indices_ilm:
+                if indices in indices_ilm["indices"].keys():
+                    if indices_ilm["indices"][indices]["managed"]:
+                        policy = indices_ilm["indices"][indices]["policy"]
+                        indices_data["phase"] = indices_ilm["indices"][indices]["phase"]
+                        for phase in ilm_policies[policy]["policy"]["phases"].keys():
+                            if phase == "hot":
+                                indices_data["drp_" + phase + "_max_age"] = ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"]["max_age"]
+                            else:
+                                indices_data["drp_" + phase + "_min_age"] = ilm_policies[policy]["policy"]["phases"][phase]["min_age"]
             indices_data_list.append(indices_data)
             if len(indices_data_list) >= data_buffer_size:
                 write_to_csv(indices_data_list, output_path)
@@ -141,7 +151,7 @@ def parse_size(raw_size):
         return parsed_size
 
 
-def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None):
+def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None, ilm_policies=None, indices_ilm=None):
     indices_data_list = []
     for indices in str(raw_indices).splitlines():
         try:
@@ -158,6 +168,16 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
                     owner_details = get_owner(config=config, index_pattern=indices.split()[2])
                     indices_data['owner'] = owner_details['owner']
                     indices_data['project'] = owner_details['project']
+                if ilm_policies and indices_ilm:
+                    if indices.split()[2] in indices_ilm["indices"].keys():
+                        if indices_ilm["indices"][indices.split()[2]]["managed"]:
+                            policy = indices_ilm["indices"][indices.split()[2]]["policy"]
+                            indices_data["phase"] = indices_ilm["indices"][indices.split()[2]]["phase"]
+                            for phase in ilm_policies[policy]["policy"]["phases"].keys():
+                                if phase == "hot":
+                                    indices_data["drp_" + phase + "_max_age"] = ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"]["max_age"]
+                                else:
+                                    indices_data["drp_" + phase + "_min_age"] = ilm_policies[policy]["policy"]["phases"][phase]["min_age"]
                 indices_data_list.append(indices_data)
                 if len(indices_data_list) >= data_buffer_size:
                     write_to_csv(indices_data_list, output_path)
@@ -346,6 +366,14 @@ def main():
         try:
             es.cluster.health()
             try:
+                ilm_policies = es.ilm.get_lifecycle()
+                indices_ilm = es.ilm.explain_lifecycle(index='*')
+            except Exception as e:
+                print('ERROR: {error}'.format(error=e))
+                print('Unable to Fetch ilm policies')
+                ilm_policies = None
+                indices_ilm = None
+            try:
                 raw_indices = get_raw_indices(es=es)
                 if not os.path.exists(report_dir_path):
                     os.makedirs(report_dir_path)
@@ -365,7 +393,9 @@ def main():
                     data_buffer_size=data_buffer_size,
                     data_buffer_interval=data_buffer_interval,
                     output_path=output_path,
-                    config=config
+                    config=config,
+                    ilm_policies=ilm_policies,
+                    indices_ilm=indices_ilm
                 )
             except Exception as e:
                 print('ERROR: {error}'.format(error=e))
@@ -390,7 +420,9 @@ def main():
                     data_buffer_size=data_buffer_size,
                     data_buffer_interval=data_buffer_interval,
                     output_path=output_path,
-                    config=config
+                    config=config,
+                    ilm_policies=ilm_policies,
+                    indices_ilm=indices_ilm
                 )
         except Exception as e:
             print('ERROR: {error}'.format(error=str(e)))
