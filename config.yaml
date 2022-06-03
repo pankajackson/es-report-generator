@@ -1,15 +1,13 @@
 owners:
-  James:
-    - project: proj20
-      index_patterns:
-        - covid-2020-*
-    - project: proj21
-      index_patterns:
-        - covid-2021-*
-    - project: proj22
-      index_patterns:
-        - covid-2022-*
-  System:
-    - project: proj-sys
-      index_patterns:
-        - .*
+  - name: "James"
+    projects:
+      - name: Covid
+        index_patterns:
+          - covid-*
+  - name: "System"
+    projects:
+      - name: "System"
+        index_patterns:
+          - .*
+
+

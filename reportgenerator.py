@@ -15,7 +15,7 @@ import pwd
 import os
 import time
 import warnings
-VERSION = 0.26
+VERSION = 0.27
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -58,11 +58,11 @@ def parse_config(config_path):
 
 def get_owner(config, index_pattern):
     try:
-        for owner in config['owners'].keys():
-            for proj in config['owners'][owner]:
+        for owner in config['owners']:
+            for proj in owner["projects"]:
                 for pattern in proj['index_patterns']:
                     if fnmatch.fnmatch(index_pattern, pattern):
-                        return {'owner': owner, 'project': proj['project']}
+                        return {'owner': owner["name"], 'project': proj['name']}
         return {'owner': None, 'project': None}
     except Exception as e:
         print('ERROR: {error}'.format(error=e))
