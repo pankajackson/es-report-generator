@@ -1,4 +1,4 @@
-# ES Report Generator (v0.1) #
+# ES Report Generator (v0.2X) #
 
 
 * Quick summary: This tool is to generate current elasticsearch indices report in csv file
