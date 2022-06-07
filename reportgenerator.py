@@ -116,7 +116,8 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                         indices_data["phase"] = indices_ilm["indices"][indices]["phase"]
                         for phase in ilm_policies[policy]["policy"]["phases"].keys():
                             if phase == "hot":
-                                indices_data["drp_" + phase + "_max_age"] = ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"]["max_age"]
+                                for rollover in ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"].keys():
+                                    indices_data["drp_" + phase + "_" + rollover] = ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"][rollover]
                             else:
                                 indices_data["drp_" + phase + "_min_age"] = ilm_policies[policy]["policy"]["phases"][phase]["min_age"]
             indices_data_list.append(indices_data)
@@ -176,7 +177,8 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
                             indices_data["phase"] = indices_ilm["indices"][indices.split()[2]]["phase"]
                             for phase in ilm_policies[policy]["policy"]["phases"].keys():
                                 if phase == "hot":
-                                    indices_data["drp_" + phase + "_max_age"] = ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"]["max_age"]
+                                    for rollover in ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"].keys():
+                                        indices_data["drp_" + phase + "_" + rollover] = ilm_policies[policy]["policy"]["phases"][phase]["actions"]["rollover"][rollover]
                                 else:
                                     indices_data["drp_" + phase + "_min_age"] = ilm_policies[policy]["policy"]["phases"][phase]["min_age"]
                 indices_data_list.append(indices_data)
