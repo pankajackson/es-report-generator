@@ -7,12 +7,17 @@ from pygrok import Grok as gk
 import yaml
 from pathlib import Path
 import fnmatch
+import numpy as np
 import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
 import uuid
 import base64
 import argparse
 import pwd
 import os
+import pathlib
 import time
 import warnings
 VERSION = 0.30
@@ -84,12 +89,6 @@ def write_to_csv(indices_data_list, output_path):
 
 
 def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None, ilm_policies=None, indices_ilm=None):
-    shards_status = {
-        "shards_total": raw_indices['_shards']['total'],
-        "shards_successful": raw_indices['_shards']['successful'],
-        "shards_failed": raw_indices['_shards']['failed'],
-    }
-
     indices_data_list = []
     for indices in raw_indices['indices']:
         if (not str(indices).startswith('.')) or (include_system_indices and str(indices).startswith('.')):
@@ -126,25 +125,8 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 indices_data_list.clear()
                 time.sleep(data_buffer_interval)
 
-    total_indices_data = {
-        "indices": 'Total',
-        "shard_primary_count": raw_indices['_all']['primaries']['shard_stats']['total_count'],
-        "shard_replica_count": raw_indices['_all']['total']['shard_stats']['total_count'] - raw_indices['_all']['primaries']['shard_stats']['total_count'],
-        "shard_total_count": raw_indices['_all']['total']['shard_stats']['total_count'],
-        "docs_primary_count": raw_indices['_all']['primaries']['docs']['count'],
-        "docs_replica_count": raw_indices['_all']['total']['docs']['count'] - raw_indices['_all']['primaries']['docs']['count'],
-        "docs_total_count": raw_indices['_all']['total']['docs']['count'],
-        "store_primary_size(GB)": _to_gb_converter(raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_replica_size(GB)": _to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'] - raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_total_size(GB)": _to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'])
-
-    }
-    indices_data_list.append(total_indices_data)
     write_to_csv(indices_data_list, output_path)
-    print('Report: {rp}'.format(rp=os.path.abspath(output_path)))
-    print('Total Shards: {ts}'.format(ts=shards_status['shards_total']))
-    print('Successful Shards: {ss}'.format(ss=shards_status['shards_successful']))
-    print('Failed Shards: {fs}'.format(fs=shards_status['shards_failed']))
+    return os.path.abspath(output_path)
 
 def parse_size(raw_size):
     pattern = '%{BASE10NUM:size}%{NOTSPACE:unit}'
@@ -193,7 +175,84 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
 
 
     write_to_csv(indices_data_list, output_path)
-    print('Report: {rp}'.format(rp=os.path.abspath(output_path)))
+    return os.path.abspath(output_path)
+
+def load_df(csv_path=None):
+    if not csv_path:
+        return None
+    df = pd.read_csv(csv_path)
+    return df
+
+def generate_graphs(df_csv_path=None, out_path=None):
+    if not df_csv_path:
+        return None
+    df = load_df(csv_path=df_csv_path)
+    df_size_per_owner  = df.groupby(['owner']).sum().reset_index()
+    df_size_per_project = df.groupby(['project']).sum().reset_index()
+    print(df_size_per_owner)
+    print(df_size_per_project)
+
+    # Plot Bar plot
+    sns.set(rc={'figure.figsize': (16, 15)})
+    df_size_per_owner_bar_plt = sns.barplot(
+        data=df_size_per_owner,
+        x='owner',
+        y='store_total_size(GB)',
+        dodge=False,
+        alpha=0.5,
+        linestyle='-',
+        linewidth=2,
+        edgecolor='k',
+        estimator=np.max,
+        ci=None,
+        palette='hls',
+        saturation=0.3,
+
+    )
+    for i in df_size_per_owner_bar_plt.containers:
+        df_size_per_owner_bar_plt.bar_label(i, )
+        df_size_per_owner_bar_plt.set(
+            title='Total storage consumption',
+            xlabel='Owner',
+            ylabel='Storage Size in GB'
+        )
+    df_size_per_owner_bar_plt.set_xticklabels(df_size_per_owner_bar_plt.get_xticklabels(), rotation=25, ha="right")
+    # Save Graph
+    df_size_per_owner_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-owner.png'), dpi=100)
+    df_size_per_owner_bar_plt.figure.clear()
+    sns.reset_defaults()
+
+    # Plot Bar plot
+    sns.set(rc={'figure.figsize': (df_size_per_project.shape[0]*4, 15)})
+    df_size_per_project_bar_plt = sns.barplot(
+        data=df_size_per_project,
+        x='project',
+        y='store_total_size(GB)',
+        dodge=False,
+        alpha=0.5,
+        linestyle='-',
+        linewidth=2,
+        edgecolor='k',
+        estimator=np.max,
+        ci=None,
+        palette='hls',
+        saturation=0.3,
+
+    )
+    for i in df_size_per_project_bar_plt.containers:
+        df_size_per_project_bar_plt.bar_label(i, )
+        df_size_per_project_bar_plt.set(
+            title='Total storage consumption',
+            xlabel='Project',
+            ylabel='Storage Size in GB'
+        )
+    df_size_per_project_bar_plt.set_xticklabels(df_size_per_project_bar_plt.get_xticklabels(), rotation=25, ha="right")
+    # Save Graph
+    df_size_per_project_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-project.png'), dpi=100)
+    df_size_per_owner_bar_plt.figure.clear()
+    sns.reset_defaults()
+    return os.path.join(out_path, 'barplot.png')
+
 
 
 def _get_parser():
@@ -390,7 +449,7 @@ def main():
                                                                 sf=report_file_name_suffix)
                 output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(
                     out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
-                parse_raw_indices(
+                report_csv = parse_raw_indices(
                     raw_indices=raw_indices,
                     include_system_indices=not skip_system_indices,
                     data_buffer_size=data_buffer_size,
@@ -417,7 +476,7 @@ def main():
                                                                 sf=report_file_name_suffix)
                 output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(
                     out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
-                parse_raw_indices_web(
+                report_csv = parse_raw_indices_web(
                     raw_indices=raw_indices,
                     include_system_indices=not skip_system_indices,
                     data_buffer_size=data_buffer_size,
@@ -427,6 +486,10 @@ def main():
                     ilm_policies=ilm_policies,
                     indices_ilm=indices_ilm
                 )
+            if report_csv:
+                print('Report: {rp}'.format(rp=report_csv))
+                graphs = generate_graphs(df_csv_path=report_csv, out_path=pathlib.Path(report_csv).parent.absolute())
+                print(graphs)
         except Exception as e:
             print('ERROR: {error}'.format(error=str(e)))
 
