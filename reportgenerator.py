@@ -20,7 +20,7 @@ import os
 import pathlib
 import time
 import warnings
-VERSION = 0.30
+VERSION = 1.01
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -181,6 +181,8 @@ def load_df(csv_path=None):
     if not csv_path:
         return None
     df = pd.read_csv(csv_path)
+    df['owner'].fillna(value='UNKNOWN', inplace=True)
+    df['project'].fillna(value='UNKNOWN', inplace=True)
     return df
 
 def generate_graphs(df_csv_path=None, out_path=None):
@@ -221,7 +223,6 @@ def generate_graphs(df_csv_path=None, out_path=None):
     # Save Graph
     df_size_per_owner_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-owner.png'), dpi=100)
     df_size_per_owner_bar_plt.figure.clear()
-    sns.reset_defaults()
 
     # Plot Bar plot
     # TODO: try to reset figure size before applying new size
@@ -252,7 +253,6 @@ def generate_graphs(df_csv_path=None, out_path=None):
     # Save Graph
     df_size_per_project_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-project.png'), dpi=100)
     df_size_per_owner_bar_plt.figure.clear()
-    sns.reset_defaults()
     return os.path.join(out_path, 'barplot.png')
 
 
