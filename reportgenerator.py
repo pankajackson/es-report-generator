@@ -194,11 +194,14 @@ def generate_graphs(df_csv_path=None, out_path=None):
     print(df_size_per_owner)
     print(df_size_per_project)
 
-    # Plot Bar plot
-    # TODO: try to reset figure size before applying new size
-    sns.set(rc={'figure.figsize': (16, 15)})
+    # Set figure size
+    sns.set(rc={'figure.figsize': (16, 16)})
+
+    # Plot first Bar Chart
+    plt.subplot(2, 1, 1)
+    # Plot first x axis
     df_size_per_owner_bar_plt = sns.barplot(
-        data=df_size_per_owner,
+        data=df_size_per_owner.sort_values(by=['store_total_size(GB)'], ascending=False),
         x='owner',
         y='store_total_size(GB)',
         dodge=False,
@@ -212,23 +215,18 @@ def generate_graphs(df_csv_path=None, out_path=None):
         saturation=0.3,
 
     )
+    # Set X labels
     for i in df_size_per_owner_bar_plt.containers:
         df_size_per_owner_bar_plt.bar_label(i, )
-        df_size_per_owner_bar_plt.set(
-            title='Total storage consumption',
-            xlabel='Owner',
-            ylabel='Storage Size in GB'
-        )
+        df_size_per_owner_bar_plt.set(xlabel='Owner', ylabel='Storage Size (GB)')
+    # Rotate X labels
     df_size_per_owner_bar_plt.set_xticklabels(df_size_per_owner_bar_plt.get_xticklabels(), rotation=25, ha="right")
-    # Save Graph
-    df_size_per_owner_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-owner.png'), dpi=100)
-    df_size_per_owner_bar_plt.figure.clear()
 
-    # Plot Bar plot
-    # TODO: try to reset figure size before applying new size
-    sns.set(rc={'figure.figsize': (df_size_per_project.shape[0]*4, 15)})
+    # Plot second Bar Chart
+    plt.subplot(2, 1, 2)
+    # Plot first x axis
     df_size_per_project_bar_plt = sns.barplot(
-        data=df_size_per_project,
+        data=df_size_per_project.sort_values(by=['store_total_size(GB)'], ascending=False),
         x='project',
         y='store_total_size(GB)',
         dodge=False,
@@ -242,14 +240,30 @@ def generate_graphs(df_csv_path=None, out_path=None):
         saturation=0.3,
 
     )
+    # Set Bars labels
     for i in df_size_per_project_bar_plt.containers:
         df_size_per_project_bar_plt.bar_label(i, )
-        df_size_per_project_bar_plt.set(
-            title='Total storage consumption',
-            xlabel='Project',
-            ylabel='Storage Size in GB'
-        )
+
+    # Plot second x axis
+    df_size_per_project_bar_plt = sns.barplot(
+        data=df_size_per_project.sort_values(by=['store_total_size(GB)'], ascending=False),
+        x='project',
+        y='store_primary_size(GB)',
+        dodge=False,
+        alpha=0.5,
+        linestyle='-',
+        linewidth=2,
+        edgecolor='k',
+        estimator=np.max,
+        ci=None,
+        palette='hls',
+        saturation=0.5,
+    )
+    # Set Bars labels
+    df_size_per_project_bar_plt.set(xlabel='Project',ylabel='Storage Size (GB)')
+
     df_size_per_project_bar_plt.set_xticklabels(df_size_per_project_bar_plt.get_xticklabels(), rotation=25, ha="right")
+
     # Save Graph
     df_size_per_project_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-project.png'), dpi=100)
     df_size_per_owner_bar_plt.figure.clear()
