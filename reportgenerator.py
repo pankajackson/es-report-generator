@@ -193,6 +193,7 @@ def generate_graphs(df_csv_path=None, out_path=None):
     print(df_size_per_project)
 
     # Plot Bar plot
+    # TODO: try to reset figure size before applying new size
     sns.set(rc={'figure.figsize': (16, 15)})
     df_size_per_owner_bar_plt = sns.barplot(
         data=df_size_per_owner,
@@ -223,6 +224,7 @@ def generate_graphs(df_csv_path=None, out_path=None):
     sns.reset_defaults()
 
     # Plot Bar plot
+    # TODO: try to reset figure size before applying new size
     sns.set(rc={'figure.figsize': (df_size_per_project.shape[0]*4, 15)})
     df_size_per_project_bar_plt = sns.barplot(
         data=df_size_per_project,
