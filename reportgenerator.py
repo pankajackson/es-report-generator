@@ -20,7 +20,7 @@ import os
 import pathlib
 import time
 import warnings
-VERSION = 1.01
+VERSION = 1.02
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -269,6 +269,91 @@ def generate_graphs(df_csv_path=None, out_path=None):
     df_size_per_owner_bar_plt.figure.clear()
     return os.path.join(out_path, 'barplot.png')
 
+def gen_visualization(df_csv_path=None, config=None, output_path=pwd.getpwuid(os.getuid()).pw_dir):
+    if not config:
+        return "INFO: Skipping Graph, Config unavailable"
+    if not "graphs" in config.keys():
+        return "INFO: Skipping Graph, Graph Config unavailable"
+    if not df_csv_path:
+        return "ERROR: Skipping Graph, CSV File not found"
+    df = load_df(csv_path=df_csv_path)
+    if df.shape == [0,0]:
+        return "INFO: Skipping Graph, DataFrame unavailable"
+    fig_length = 0
+    final_graphs_list = []
+    for idx, graph in enumerate(config['graphs']):
+        if graph['type'] == 'barchart':
+            try:
+                if graph['properties']['x'] in df.columns and  graph['properties']['y1'] in df.columns:
+                    length = df.groupby(graph['properties']['x']).sum().reset_index().shape[0]
+                    if length > fig_length:
+                        fig_length = length
+                    if graph not in final_graphs_list:
+                        final_graphs_list.append(graph)
+                    else:
+                        print('Skipping no. {index} graph \"{gf}\" as it already exist.'.format(index=idx + 1, gf=graph['name']))
+                else:
+                    print("Defined Header unavailable, Skipping graph \"{graph}\"".format(graph=graph['name']))
+            except Exception as e:
+                print("ERROR: {error}".format(error=e))
+
+    if len(final_graphs_list) <= 0:
+        return None
+    fig_height = 8*(len(final_graphs_list) - len(final_graphs_list)/4)
+
+    fig, axes = plt.subplots(len(final_graphs_list), 1, figsize=(fig_length, fig_height))
+    fig.suptitle('Pokemon Stats by Generation')
+    fig.subplots_adjust(hspace=0.3, wspace=0.3)
+    for graph in final_graphs_list:
+        df_aggr = df.groupby(graph['properties']['x']).sum().reset_index().sort_values(by=graph['properties']['y1'], ascending=False)
+
+        sns.barplot(
+            ax=axes[final_graphs_list.index(graph)],
+            data=df_aggr,
+            x=graph['properties']['x'],
+            y=graph['properties']['y1'],
+            dodge=False,
+            alpha=0.5,
+            linestyle='-',
+            linewidth=2,
+            edgecolor='k',
+            estimator=np.max,
+            ci=None,
+            palette='hls',
+            saturation=0.3,
+        )
+
+        for i in axes[final_graphs_list.index(graph)].containers:
+            axes[final_graphs_list.index(graph)].bar_label(i, )
+
+        if 'y2' in graph['properties'].keys() and graph['properties']['y2']:
+            sns.barplot(
+                ax=axes[final_graphs_list.index(graph)],
+                data=df_aggr,
+                x=graph['properties']['x'],
+                y=graph['properties']['y2'],
+                dodge=False,
+                alpha=0.5,
+                linestyle='-',
+                linewidth=2,
+                edgecolor='k',
+                estimator=np.max,
+                ci=None,
+                palette='hls',
+                saturation=0.3,
+            )
+
+        axes[final_graphs_list.index(graph)].set_title(graph['name'])
+
+        if "xlabel" in graph['properties'].keys() and graph['properties']['xlabel']:
+            axes[final_graphs_list.index(graph)].set(xlabel=graph['properties']['xlabel'])
+        if "ylabel" in graph['properties'].keys() and graph['properties']['ylabel']:
+            axes[final_graphs_list.index(graph)].set(ylabel=graph['properties']['ylabel'])
+        axes[final_graphs_list.index(graph)].set_xticklabels(axes[final_graphs_list.index(graph)].get_xticklabels(), rotation=25, ha="right")
+
+    plt.savefig(os.path.join(output_path, 'chart.png'), dpi=100)
+    plt.clf()
+    return os.path.join(output_path, 'chart.png')
 
 
 def _get_parser():
@@ -504,8 +589,11 @@ def main():
                 )
             if report_csv:
                 print('Report: {rp}'.format(rp=report_csv))
-                graphs = generate_graphs(df_csv_path=report_csv, out_path=pathlib.Path(report_csv).parent.absolute())
-                print(graphs)
+                # graphs = generate_graphs(df_csv_path=report_csv, out_path=pathlib.Path(report_csv).parent.absolute())
+                graphs = gen_visualization(df_csv_path=report_csv, config=config,
+                                           output_path=pathlib.Path(report_csv).parent.absolute())
+                print('Graph: {gf}'.format(gf=graphs))
+
         except Exception as e:
             print('ERROR: {error}'.format(error=str(e)))
 
