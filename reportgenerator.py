@@ -302,7 +302,7 @@ def gen_visualization(df_csv_path=None, config=None, output_path=pwd.getpwuid(os
     fig_height = 8*(len(final_graphs_list) - len(final_graphs_list)/4)
 
     fig, axes = plt.subplots(len(final_graphs_list), 1, figsize=(fig_length, fig_height))
-    fig.suptitle('Pokemon Stats by Generation')
+    fig.suptitle('Elasticsearch Report {dt}'.format(dt=datetime.now().strftime('%Y/%m/%d %H:%M')))
     fig.subplots_adjust(hspace=0.3, wspace=0.3)
     for graph in final_graphs_list:
         df_aggr = df.groupby(graph['properties']['x']).sum().reset_index().sort_values(by=graph['properties']['y1'], ascending=False)
