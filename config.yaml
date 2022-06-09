@@ -1,13 +1,42 @@
 owners:
-  - name: "James"
+  - name: "Pankaj"
     projects:
-      - name: Covid
+      - name: "Covid Analysis 2020"
         index_patterns:
-          - covid-*
+          - covid-2020-*
+      - name: "Covid Analysis 2021"
+        index_patterns:
+          - covid-2021-*
+      - name: "Covid Analysis 2022"
+        index_patterns:
+          - covid-2022-*
+      - name: "Http Data"
+        index_patterns:
+          - http-input-*
+      - name: "Network Analyzer"
+        index_patterns:
+          - ntopng-*
   - name: "System"
     projects:
       - name: "System"
         index_patterns:
           - .*
 
+graphs:
+  - name: "storage per owner"
+    type: "barchart"
+    properties:
+      x: "owner"
+      y1: "store_total_size(GB)"
+      y2: "store_primary_size(GB)"
+      xlabel: "Owner"
+      ylabel: "Store Size"
 
+  - name: "storage per project"
+    type: "barchart"
+    properties:
+      x: "project"
+      y1: "store_total_size(GB)"
+      y2: "store_primary_size(GB)"
+      xlabel: "Project"
+      ylabel: "Store Size"

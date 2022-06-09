@@ -7,15 +7,20 @@ from pygrok import Grok as gk
 import yaml
 from pathlib import Path
 import fnmatch
+import numpy as np
 import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
 import uuid
 import base64
 import argparse
 import pwd
 import os
+import pathlib
 import time
 import warnings
-VERSION = 0.30
+VERSION = 1.02
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -84,12 +89,6 @@ def write_to_csv(indices_data_list, output_path):
 
 
 def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None, ilm_policies=None, indices_ilm=None):
-    shards_status = {
-        "shards_total": raw_indices['_shards']['total'],
-        "shards_successful": raw_indices['_shards']['successful'],
-        "shards_failed": raw_indices['_shards']['failed'],
-    }
-
     indices_data_list = []
     for indices in raw_indices['indices']:
         if (not str(indices).startswith('.')) or (include_system_indices and str(indices).startswith('.')):
@@ -126,25 +125,8 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 indices_data_list.clear()
                 time.sleep(data_buffer_interval)
 
-    total_indices_data = {
-        "indices": 'Total',
-        "shard_primary_count": raw_indices['_all']['primaries']['shard_stats']['total_count'],
-        "shard_replica_count": raw_indices['_all']['total']['shard_stats']['total_count'] - raw_indices['_all']['primaries']['shard_stats']['total_count'],
-        "shard_total_count": raw_indices['_all']['total']['shard_stats']['total_count'],
-        "docs_primary_count": raw_indices['_all']['primaries']['docs']['count'],
-        "docs_replica_count": raw_indices['_all']['total']['docs']['count'] - raw_indices['_all']['primaries']['docs']['count'],
-        "docs_total_count": raw_indices['_all']['total']['docs']['count'],
-        "store_primary_size(GB)": _to_gb_converter(raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_replica_size(GB)": _to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'] - raw_indices['_all']['primaries']['store']['size_in_bytes']),
-        "store_total_size(GB)": _to_gb_converter(raw_indices['_all']['total']['store']['size_in_bytes'])
-
-    }
-    indices_data_list.append(total_indices_data)
     write_to_csv(indices_data_list, output_path)
-    print('Report: {rp}'.format(rp=os.path.abspath(output_path)))
-    print('Total Shards: {ts}'.format(ts=shards_status['shards_total']))
-    print('Successful Shards: {ss}'.format(ss=shards_status['shards_successful']))
-    print('Failed Shards: {fs}'.format(fs=shards_status['shards_failed']))
+    return os.path.abspath(output_path)
 
 def parse_size(raw_size):
     pattern = '%{BASE10NUM:size}%{NOTSPACE:unit}'
@@ -193,7 +175,185 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
 
 
     write_to_csv(indices_data_list, output_path)
-    print('Report: {rp}'.format(rp=os.path.abspath(output_path)))
+    return os.path.abspath(output_path)
+
+def load_df(csv_path=None):
+    if not csv_path:
+        return None
+    df = pd.read_csv(csv_path)
+    df['owner'].fillna(value='UNKNOWN', inplace=True)
+    df['project'].fillna(value='UNKNOWN', inplace=True)
+    return df
+
+def generate_graphs(df_csv_path=None, out_path=None):
+    if not df_csv_path:
+        return None
+    df = load_df(csv_path=df_csv_path)
+    df_size_per_owner  = df.groupby(['owner']).sum().reset_index()
+    df_size_per_project = df.groupby(['project']).sum().reset_index()
+    print(df_size_per_owner)
+    print(df_size_per_project)
+
+    # Set figure size
+    sns.set(rc={'figure.figsize': (16, 16)})
+
+    # Plot first Bar Chart
+    plt.subplot(2, 1, 1)
+    # Plot first x axis
+    df_size_per_owner_bar_plt = sns.barplot(
+        data=df_size_per_owner.sort_values(by=['store_total_size(GB)'], ascending=False),
+        x='owner',
+        y='store_total_size(GB)',
+        dodge=False,
+        alpha=0.5,
+        linestyle='-',
+        linewidth=2,
+        edgecolor='k',
+        estimator=np.max,
+        ci=None,
+        palette='hls',
+        saturation=0.3,
+
+    )
+    # Set X labels
+    for i in df_size_per_owner_bar_plt.containers:
+        df_size_per_owner_bar_plt.bar_label(i, )
+        df_size_per_owner_bar_plt.set(xlabel='Owner', ylabel='Storage Size (GB)')
+    # Rotate X labels
+    df_size_per_owner_bar_plt.set_xticklabels(df_size_per_owner_bar_plt.get_xticklabels(), rotation=25, ha="right")
+
+    # Plot second Bar Chart
+    plt.subplot(2, 1, 2)
+    # Plot first x axis
+    df_size_per_project_bar_plt = sns.barplot(
+        data=df_size_per_project.sort_values(by=['store_total_size(GB)'], ascending=False),
+        x='project',
+        y='store_total_size(GB)',
+        dodge=False,
+        alpha=0.5,
+        linestyle='-',
+        linewidth=2,
+        edgecolor='k',
+        estimator=np.max,
+        ci=None,
+        palette='hls',
+        saturation=0.3,
+
+    )
+    # Set Bars labels
+    for i in df_size_per_project_bar_plt.containers:
+        df_size_per_project_bar_plt.bar_label(i, )
+
+    # Plot second x axis
+    df_size_per_project_bar_plt = sns.barplot(
+        data=df_size_per_project.sort_values(by=['store_total_size(GB)'], ascending=False),
+        x='project',
+        y='store_primary_size(GB)',
+        dodge=False,
+        alpha=0.5,
+        linestyle='-',
+        linewidth=2,
+        edgecolor='k',
+        estimator=np.max,
+        ci=None,
+        palette='hls',
+        saturation=0.5,
+    )
+    # Set Bars labels
+    df_size_per_project_bar_plt.set(xlabel='Project',ylabel='Storage Size (GB)')
+
+    df_size_per_project_bar_plt.set_xticklabels(df_size_per_project_bar_plt.get_xticklabels(), rotation=25, ha="right")
+
+    # Save Graph
+    df_size_per_project_bar_plt.figure.savefig(os.path.join(out_path, 'barplot-project.png'), dpi=100)
+    df_size_per_owner_bar_plt.figure.clear()
+    return os.path.join(out_path, 'barplot.png')
+
+def gen_visualization(df_csv_path=None, config=None, output_path=pwd.getpwuid(os.getuid()).pw_dir):
+    if not config:
+        return "INFO: Skipping Graph, Config unavailable"
+    if not "graphs" in config.keys():
+        return "INFO: Skipping Graph, Graph Config unavailable"
+    if not df_csv_path:
+        return "ERROR: Skipping Graph, CSV File not found"
+    df = load_df(csv_path=df_csv_path)
+    if df.shape == [0,0]:
+        return "INFO: Skipping Graph, DataFrame unavailable"
+    fig_length = 0
+    final_graphs_list = []
+    for idx, graph in enumerate(config['graphs']):
+        if graph['type'] == 'barchart':
+            try:
+                if graph['properties']['x'] in df.columns and  graph['properties']['y1'] in df.columns:
+                    length = df.groupby(graph['properties']['x']).sum().reset_index().shape[0]
+                    if length > fig_length:
+                        fig_length = length
+                    if graph not in final_graphs_list:
+                        final_graphs_list.append(graph)
+                    else:
+                        print('Skipping no. {index} graph \"{gf}\" as it already exist.'.format(index=idx + 1, gf=graph['name']))
+                else:
+                    print("Defined Header unavailable, Skipping graph \"{graph}\"".format(graph=graph['name']))
+            except Exception as e:
+                print("ERROR: {error}".format(error=e))
+
+    if len(final_graphs_list) <= 0:
+        return None
+    fig_height = 8*(len(final_graphs_list) - len(final_graphs_list)/4)
+
+    fig, axes = plt.subplots(len(final_graphs_list), 1, figsize=(fig_length, fig_height))
+    fig.suptitle('Pokemon Stats by Generation')
+    fig.subplots_adjust(hspace=0.3, wspace=0.3)
+    for graph in final_graphs_list:
+        df_aggr = df.groupby(graph['properties']['x']).sum().reset_index().sort_values(by=graph['properties']['y1'], ascending=False)
+
+        sns.barplot(
+            ax=axes[final_graphs_list.index(graph)],
+            data=df_aggr,
+            x=graph['properties']['x'],
+            y=graph['properties']['y1'],
+            dodge=False,
+            alpha=0.5,
+            linestyle='-',
+            linewidth=2,
+            edgecolor='k',
+            estimator=np.max,
+            ci=None,
+            palette='hls',
+            saturation=0.3,
+        )
+
+        for i in axes[final_graphs_list.index(graph)].containers:
+            axes[final_graphs_list.index(graph)].bar_label(i, )
+
+        if 'y2' in graph['properties'].keys() and graph['properties']['y2']:
+            sns.barplot(
+                ax=axes[final_graphs_list.index(graph)],
+                data=df_aggr,
+                x=graph['properties']['x'],
+                y=graph['properties']['y2'],
+                dodge=False,
+                alpha=0.5,
+                linestyle='-',
+                linewidth=2,
+                edgecolor='k',
+                estimator=np.max,
+                ci=None,
+                palette='hls',
+                saturation=0.3,
+            )
+
+        axes[final_graphs_list.index(graph)].set_title(graph['name'])
+
+        if "xlabel" in graph['properties'].keys() and graph['properties']['xlabel']:
+            axes[final_graphs_list.index(graph)].set(xlabel=graph['properties']['xlabel'])
+        if "ylabel" in graph['properties'].keys() and graph['properties']['ylabel']:
+            axes[final_graphs_list.index(graph)].set(ylabel=graph['properties']['ylabel'])
+        axes[final_graphs_list.index(graph)].set_xticklabels(axes[final_graphs_list.index(graph)].get_xticklabels(), rotation=25, ha="right")
+
+    plt.savefig(os.path.join(output_path, 'chart.png'), dpi=100)
+    plt.clf()
+    return os.path.join(output_path, 'chart.png')
 
 
 def _get_parser():
@@ -390,7 +550,7 @@ def main():
                                                                 sf=report_file_name_suffix)
                 output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(
                     out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
-                parse_raw_indices(
+                report_csv = parse_raw_indices(
                     raw_indices=raw_indices,
                     include_system_indices=not skip_system_indices,
                     data_buffer_size=data_buffer_size,
@@ -417,7 +577,7 @@ def main():
                                                                 sf=report_file_name_suffix)
                 output_path = os.path.join(report_dir_path, "{out_file_name}.csv".format(
                     out_file_name=str(report_file_name).replace('.', '-').replace(':', '-').replace('/', '-')))
-                parse_raw_indices_web(
+                report_csv = parse_raw_indices_web(
                     raw_indices=raw_indices,
                     include_system_indices=not skip_system_indices,
                     data_buffer_size=data_buffer_size,
@@ -427,6 +587,13 @@ def main():
                     ilm_policies=ilm_policies,
                     indices_ilm=indices_ilm
                 )
+            if report_csv:
+                print('Report: {rp}'.format(rp=report_csv))
+                # graphs = generate_graphs(df_csv_path=report_csv, out_path=pathlib.Path(report_csv).parent.absolute())
+                graphs = gen_visualization(df_csv_path=report_csv, config=config,
+                                           output_path=pathlib.Path(report_csv).parent.absolute())
+                print('Graph: {gf}'.format(gf=graphs))
+
         except Exception as e:
             print('ERROR: {error}'.format(error=str(e)))
 
