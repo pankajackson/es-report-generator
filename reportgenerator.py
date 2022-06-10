@@ -20,7 +20,7 @@ import os
 import pathlib
 import time
 import warnings
-VERSION = 1.02
+VERSION = 1.03
 
 
 def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es_scheme=None, skip_cert=False):
@@ -40,6 +40,12 @@ def get_es_connection(es_hosts, es_user=None, es_password=None, es_port=None, es
             verify_certs=not skip_cert
         )
     return es
+
+def load_df(csv_path=None):
+    if not csv_path:
+        return None
+    df = pd.read_csv(csv_path)
+    return df
 
 def _to_gb_converter(size=0, unit='B'.upper()):
     size = float(size)
@@ -68,11 +74,11 @@ def get_owner(config, index_pattern):
                 for pattern in proj['index_patterns']:
                     if pattern:
                         if fnmatch.fnmatch(index_pattern, pattern) or fnmatch.fnmatch(index_pattern, 'shrink-{p}'.format(p=str(pattern))):
-                            return {'owner': owner["name"], 'project': proj['name']}
-        return {'owner': None, 'project': None}
+                            return {'owner': owner["name"], 'project': proj['name'], 'index_pattern': pattern}
+        return {'owner': None, 'project': None, 'index_pattern': None}
     except Exception as e:
         print('ERROR: {error}'.format(error=e))
-        return {'owner': None, 'project': None}
+        return {'owner': None, 'project': None, 'index_pattern': None}
 
 
 def get_raw_indices(es, index="*"):
@@ -86,6 +92,63 @@ def get_raw_indices_web(es, index="*"):
 def write_to_csv(indices_data_list, output_path):
     df = pd.DataFrame(indices_data_list)
     df.to_csv(output_path, mode='a', index=False, header=not os.path.exists(output_path))
+
+def final_df_cleanup(df_csv_path=None):
+    if not df_csv_path:
+        return None
+    df = load_df(csv_path=df_csv_path)
+    if 'ts' in df.columns:
+        df['ts'] = pd.to_datetime(df['ts'])
+        ts_col = df.pop('ts')
+        df.insert(1, 'ts', ts_col)
+    if 'index_pattern' in df.columns:
+        ip_col = df.pop('index_pattern')
+        df.insert(2, 'index_pattern', ip_col)
+    df['owner'].fillna(value='UNKNOWN', inplace=True)
+    df['project'].fillna(value='UNKNOWN', inplace=True)
+    df.to_csv(df_csv_path, index=False)
+
+
+def parse_ts(indices=None, index_pattern=None, config=None):
+    ts = None
+    if not indices:
+        return None
+    print(indices)
+    if index_pattern and index_pattern in config["tsdata"]["tspatterns"].keys():
+        if config["tsdata"]["tspatterns"][index_pattern]:
+            pattern = str(config["tsdata"]["tspatterns"][index_pattern]).replace('*', '%{GREEDYDATA}').replace('TSYEAR', '%{YEAR:TSYEAR}').replace('TSMONTH', '%{MONTHNUM2:TSMONTH}').replace('TSDAY', '%{MONTHDAY:TSDAY}')
+            ts = gk(pattern=pattern).match(indices)
+            if not ts:
+                pattern = pattern.replace('MONTHNUM2', 'MONTHNUM')
+                ts = gk(pattern=pattern).match(indices)
+
+    if not ts:
+        try:
+            default_ts_pattern = config["tsdata"]["tspatterns"]["default"]
+        except:
+            default_ts_pattern = "*-TSYEAR.TSMONTH.TSDAY"
+        pattern = str(default_ts_pattern).replace('*', '%{GREEDYDATA}').replace('TSYEAR', '%{YEAR:TSYEAR}').replace('TSMONTH', '%{MONTHNUM2:TSMONTH}').replace('TSDAY', '%{MONTHDAY:TSDAY}')
+        ts = gk(pattern=pattern).match(indices)
+        if not ts:
+            pattern = pattern.replace('MONTHNUM2', 'MONTHNUM')
+            ts = gk(pattern=pattern).match(indices)
+    if not ts:
+        return None
+    else:
+        try:
+            tss = ts['TSYEAR']
+            tsf = '%Y'
+            if 'TSMONTH' in ts.keys() and ts['TSMONTH']:
+                tss += '/' + ts['TSMONTH']
+                tsf += '/%m'
+            if 'TSDAY' in ts.keys() and ts['TSDAY']:
+                tss += '/' + ts['TSDAY']
+                tsf += '/%d'
+            ts = datetime.strptime(tss, tsf)
+            return ts
+        except Exception as e:
+            print('ERROR: TS {error}'.format(error=e))
+            return None
 
 
 def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size=100, data_buffer_interval=0.5, output_path=os.path.join(pwd.getpwuid(os.getuid()).pw_dir, 'es-report-{dt}.csv'.format(dt=datetime.now().strftime('%Y-%m-%d-%H-%M'))), config=None, ilm_policies=None, indices_ilm=None):
@@ -108,6 +171,9 @@ def parse_raw_indices(raw_indices, include_system_indices=True, data_buffer_size
                 owner_details = get_owner(config=config, index_pattern=indices)
                 indices_data['owner'] = owner_details['owner']
                 indices_data['project'] = owner_details['project']
+                indices_data['index_pattern'] = owner_details['index_pattern']
+                ts_details = parse_ts(indices=indices, index_pattern=owner_details['index_pattern'], config=config)
+                indices_data['ts'] = ts_details
             if ilm_policies and indices_ilm:
                 if indices in indices_ilm["indices"].keys():
                     if indices_ilm["indices"][indices]["managed"]:
@@ -176,14 +242,6 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
 
     write_to_csv(indices_data_list, output_path)
     return os.path.abspath(output_path)
-
-def load_df(csv_path=None):
-    if not csv_path:
-        return None
-    df = pd.read_csv(csv_path)
-    df['owner'].fillna(value='UNKNOWN', inplace=True)
-    df['project'].fillna(value='UNKNOWN', inplace=True)
-    return df
 
 def generate_graphs(df_csv_path=None, out_path=None):
     if not df_csv_path:
@@ -588,6 +646,7 @@ def main():
                     indices_ilm=indices_ilm
                 )
             if report_csv:
+                final_df_cleanup(df_csv_path=report_csv)
                 print('Report: {rp}'.format(rp=report_csv))
                 # graphs = generate_graphs(df_csv_path=report_csv, out_path=pathlib.Path(report_csv).parent.absolute())
                 graphs = gen_visualization(df_csv_path=report_csv, config=config,
