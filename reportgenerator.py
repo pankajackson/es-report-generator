@@ -218,6 +218,9 @@ def parse_raw_indices_web(raw_indices, include_system_indices=True, data_buffer_
                     owner_details = get_owner(config=config, index_pattern=indices.split()[2])
                     indices_data['owner'] = owner_details['owner']
                     indices_data['project'] = owner_details['project']
+                    indices_data['index_pattern'] = owner_details['index_pattern']
+                    ts_details = parse_ts(indices=indices, index_pattern=owner_details['index_pattern'], config=config)
+                    indices_data['ts'] = ts_details
                 if ilm_policies and indices_ilm:
                     if indices.split()[2] in indices_ilm["indices"].keys():
                         if indices_ilm["indices"][indices.split()[2]]["managed"]:
