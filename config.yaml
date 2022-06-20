@@ -21,6 +21,11 @@ owners:
       - name: "System"
         index_patterns:
           - .*
+  - name: "James"
+    projects:
+      - name: "Twitter"
+        index_patterns:
+          - twitter-*
 
 graphs:
   - name: "storage per owner"
@@ -30,7 +35,7 @@ graphs:
       y1: "store_total_size(GB)"
       y2: "store_primary_size(GB)"
       xlabel: "Owner"
-      ylabel: "Store Size"
+      ylabel: "Store Size (GB)"
 
   - name: "storage per project"
     type: "barchart"
@@ -39,4 +44,10 @@ graphs:
       y1: "store_total_size(GB)"
       y2: "store_primary_size(GB)"
       xlabel: "Project"
-      ylabel: "Store Size"
+      ylabel: "Store Size (GB)"
+
+tsdata:
+  tspatterns:
+    default: "*-TSYEAR.TSMONTH.TSDAY"
+    covid-2020-*: "covid-TSYEAR-TSMONTH"
+    covid-2021-*: "covid-TSYEAR-TSMONTH"
